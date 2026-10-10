@@ -15,7 +15,7 @@ function authFailure(error: unknown): AuthDiagnostic {
   const messages: Record<string, string> = {
     'auth/unauthorized-domain': '目前網站網域未加入 Firebase Authentication 授權網域。',
     'auth/operation-not-allowed': 'Firebase 尚未啟用 Google 登入提供者。',
-    'auth/popup-blocked': '瀏覽器封鎖登入視窗，請允許彈出視窗或使用重新導向登入。',
+    'auth/popup-blocked': 'Safari 封鎖了登入視窗。請在 Safari 設定中允許此網站的彈出式視窗後再試。',
     'auth/popup-closed-by-user': '登入視窗在完成前已關閉。',
     'auth/cancelled-popup-request': '另一個登入視窗請求已取代這次登入。',
     'auth/network-request-failed': '網路請求失敗，請確認連線後再試。',
@@ -79,13 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthState>(() => ({ user, loading, cloudError, authDiagnostic,
     signIn: async () => {
       if (!isFirebaseConfigured()) throw new Error('請先設定 Firebase 環境變數')
+      setCloudError('')
+      setAuthDiagnostic(null)
       try {
-        const [{ auth }, { GoogleAuthProvider, signInWithPopup, signInWithRedirect }] = await Promise.all([getCloudClient(), import('firebase/auth')])
+        const [{ auth }, { GoogleAuthProvider, signInWithPopup }] = await Promise.all([getCloudClient(), import('firebase/auth')])
         const provider = new GoogleAuthProvider()
-        if (typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-          await signInWithRedirect(auth, provider)
-          return
-        }
+        // Cloudflare Pages uses a different origin from Firebase's authDomain. Safari
+        // blocks the third-party storage used by Firebase's redirect helper, so use
+        // the user-initiated popup flow instead of redirecting on iOS.
         await signInWithPopup(auth, provider)
         setAuthDiagnostic(null)
       } catch (error) {
