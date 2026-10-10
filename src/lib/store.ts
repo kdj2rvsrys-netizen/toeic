@@ -1,6 +1,7 @@
 import type { Word, StudyRecord } from '../types/word'
 import { createWord, makeId } from './words'
 import { isFirebaseConfigured } from './firebase'
+import { getCloudClient } from './firebaseCloud'
 
 const WORDS = 'toeic-words-v1'
 const RECORDS = 'toeic-records-v1'
@@ -15,10 +16,10 @@ export const listWords = () => read<Word[]>(WORDS, [])
 export const listRecords = () => read<StudyRecord[]>(RECORDS, [])
 export const listWrong = () => read<string[]>(WRONG, [])
 function cloudError(error:unknown){window.dispatchEvent(new CustomEvent('toeic-cloud-error',{detail:error instanceof Error?error.message:'雲端儲存失敗'}))}
-function writeCloud(collectionName:string,id:string,data:unknown|null){if(!isFirebaseConfigured())return;void import('./firebaseCloud').then(async({getCloudClient})=>{const{auth,db,fs}=await getCloudClient();if(!auth.currentUser)return;const ref=fs.doc(db,'users',auth.currentUser.uid,collectionName,id);await(data===null?fs.deleteDoc(ref):fs.setDoc(ref,data))}).catch(cloudError)}
+function writeCloud(collectionName:string,id:string,data:unknown|null){if(!isFirebaseConfigured())return;void getCloudClient().then(async({auth,db,fs})=>{if(!auth.currentUser)return;const ref=fs.doc(db,'users',auth.currentUser.uid,collectionName,id);await(data===null?fs.deleteDoc(ref):fs.setDoc(ref,data))}).catch(cloudError)}
 export function saveWords(words: Word[]) {
   const previous=read<Word[]>(WORDS,[]),before=new Map(previous.map(w=>[w.id,w])),after=new Map(words.map(w=>[w.id,w]));localStorage.setItem(scoped(WORDS),JSON.stringify(words))
-  if(isFirebaseConfigured()){const changes=[...words.filter(w=>JSON.stringify(before.get(w.id))!==JSON.stringify(w)).map(w=>({id:w.id,data:w})),...previous.filter(w=>!after.has(w.id)).map(w=>({id:w.id,data:null}))];if(changes.length)void import('./firebaseCloud').then(async({getCloudClient})=>{const{auth,db,fs}=await getCloudClient();const uid=auth.currentUser?.uid;if(!uid)return;for(let i=0;i<changes.length;i+=450){const batch=fs.writeBatch(db);for(const x of changes.slice(i,i+450)){const ref=fs.doc(db,'users',uid,'words',x.id);if(x.data)batch.set(ref,x.data);else batch.delete(ref)}await batch.commit()}}).catch(cloudError)}
+  if(isFirebaseConfigured()){const changes=[...words.filter(w=>JSON.stringify(before.get(w.id))!==JSON.stringify(w)).map(w=>({id:w.id,data:w})),...previous.filter(w=>!after.has(w.id)).map(w=>({id:w.id,data:null}))];if(changes.length)void getCloudClient().then(async({auth,db,fs})=>{const uid=auth.currentUser?.uid;if(!uid)return;for(let i=0;i<changes.length;i+=450){const batch=fs.writeBatch(db);for(const x of changes.slice(i,i+450)){const ref=fs.doc(db,'users',uid,'words',x.id);if(x.data)batch.set(ref,x.data);else batch.delete(ref)}await batch.commit()}}).catch(cloudError)}
 }
 export function upsertWord(word: Partial<Word> & Pick<Word, 'term'|'definition'>) {
   const all = listWords(); const old = word.id ? all.find(w => w.id === word.id) : undefined
@@ -57,7 +58,7 @@ export function importBackup(input:unknown){
 
 export async function hydrateCloud(uid:string,local:{words:Word[];records:StudyRecord[];wrong:string[]}){
  if(!isFirebaseConfigured())return
- const {db,fs}=await import('./firebaseCloud').then(m=>m.getCloudClient())
+ const {db,fs}=await getCloudClient()
  const [wordSnap,recordSnap,metaSnap]=await Promise.all([fs.getDocs(fs.collection(db,`users/${uid}/words`)),fs.getDocs(fs.collection(db,`users/${uid}/records`)),fs.getDoc(fs.doc(db,`users/${uid}/meta/state`))])
  const words=wordSnap.docs.map(d=>d.data() as Word),records=recordSnap.docs.map(d=>d.data() as StudyRecord),wordTerms=new Set(words.map(w=>w.term.trim().toLowerCase())),wordIds=new Set(words.map(w=>w.id)),recordIds=new Set(records.map(r=>r.id)),pending:{path:string;data:Word|StudyRecord|{wrongIds:string[];updatedAt:string}}[]=[],idRemap=new Map<string,string>()
  for(const word of local.words){if(wordTerms.has(word.term.trim().toLowerCase()))continue;let candidate=word;if(wordIds.has(candidate.id)){const id=makeId();idRemap.set(candidate.id,id);candidate={...word,id}}words.push(candidate);wordTerms.add(candidate.term.trim().toLowerCase());wordIds.add(candidate.id);pending.push({path:`users/${uid}/words/${candidate.id}`,data:candidate})}
