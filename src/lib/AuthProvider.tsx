@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { User } from 'firebase/auth'
 import { isFirebaseConfigured } from './firebase'
 import { getCloudClient } from './firebaseCloud'
-import { hydrateCloud, listRecords, listWords, listWrong, setStorageScope } from './store'
+import { hydrateCloud, listChapters, listRecords, listWords, listWrong, setStorageScope } from './store'
 
 interface AuthDiagnostic { code: string; message: string }
 interface AuthState { user: User | null; loading: boolean; cloudError: string; authDiagnostic: AuthDiagnostic | null; signIn: () => Promise<void>; signOutUser: () => Promise<void> }
@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false)
           return
         }
-        const local = { words: listWords(), records: listRecords(), wrong: listWrong() }
+        const local = { words: listWords(), records: listRecords(), wrong: listWrong(), chapters:listChapters() }
         setStorageScope(current.uid)
         setUser(current)
         setLoading(true)
@@ -107,3 +107,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }), [user, loading, cloudError, authDiagnostic])
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
+
