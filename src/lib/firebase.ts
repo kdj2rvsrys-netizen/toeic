@@ -1,0 +1,3 @@
+export interface FirebaseWebConfig {apiKey:string;authDomain:string;projectId:string;storageBucket:string;messagingSenderId:string;appId:string}
+export function getFirebaseConfig():FirebaseWebConfig|null{const e=import.meta.env,c:FirebaseWebConfig={apiKey:e.VITE_FIREBASE_API_KEY??'',authDomain:e.VITE_FIREBASE_AUTH_DOMAIN??'',projectId:e.VITE_FIREBASE_PROJECT_ID??'',storageBucket:e.VITE_FIREBASE_STORAGE_BUCKET??'',messagingSenderId:e.VITE_FIREBASE_MESSAGING_SENDER_ID??'',appId:e.VITE_FIREBASE_APP_ID??''};return Object.values(c).every(x=>x.trim())?c:null}
+export const isFirebaseConfigured=()=>getFirebaseConfig()!==null
