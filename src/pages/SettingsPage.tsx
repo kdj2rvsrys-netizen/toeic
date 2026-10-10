@@ -1,9 +1,9 @@
+
 import { useMemo } from 'react'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { listProviders, resolveProvider } from '../lib/ai/providerRegistry'
 import { listWords, listRecords } from '../lib/store'
 import { useAuth } from '../lib/AuthProvider'
-import { useState } from 'react'
 
 const STATUS_TEXT: Record<string, string> = {
   disabled: '未啟用（純本地運作）',
@@ -12,8 +12,7 @@ const STATUS_TEXT: Record<string, string> = {
 }
 
 export default function SettingsPage() {
-  const {user,signIn,signOutUser,cloudError}=useAuth()
-  const [accountMessage,setAccountMessage]=useState('')
+  const {user,loading,signIn,signOutUser,cloudError,authDiagnostic}=useAuth()
   const firebaseReady = useMemo(() => isFirebaseConfigured(), [])
   const providers = useMemo(() => listProviders(), [])
   const active = useMemo(
@@ -37,8 +36,9 @@ export default function SettingsPage() {
           <div className="status-row"><dt>資料模式</dt><dd><span className={user?'pill pill--ok':'pill pill--warn'}>{user?'Firebase 雲端帳號':'本機瀏覽器'}</span></dd></div>
           <div className="status-row"><dt>本機資料</dt><dd>{listWords().length} 個單字 · {listRecords().length} 次測驗</dd></div>
         </dl>
-        {user?<div className="account-box"><p>已登入：<strong>{user.displayName||user.email}</strong></p><button className="btn" onClick={()=>void signOutUser()}>登出雲端帳號</button></div>:<><p className="muted">未設定 Firebase 時單字存在本機。登入後資料將切換至此帳號專屬的 Firestore 路徑，其他帳號不會讀到。</p><button className="btn btn--primary" disabled={!firebaseReady} onClick={()=>void signIn().then(()=>setAccountMessage('Google 登入已開始')).catch(e=>setAccountMessage(e instanceof Error?e.message:'登入失敗'))}>使用 Google 登入</button></>}
-        {cloudError&&<p className="notice error-notice" role="alert">{cloudError} · 目前瀏覽器仍保留本機資料，請確認網路或 Firestore Rules。</p>}{accountMessage&&<p className="notice" role="status">{accountMessage}</p>}
+        {user?<div className="account-box"><p>雲端狀態：已登入 <strong>{user.displayName||user.email}</strong></p><button className="btn" onClick={()=>void signOutUser()}>登出雲端帳號</button></div>:<><p className="muted">雲端狀態：{loading?'正在確認登入狀態…':'未登入'}。目前使用本機資料；登入成功並確認後才會同步至此帳號專屬的 Firestore 路徑。</p><button className="btn btn--primary" disabled={!firebaseReady||loading} onClick={()=>void signIn().catch(()=>{})}>使用 Google 登入</button></>}
+        {cloudError&&<p className="notice error-notice" role="alert">{cloudError} · 雲端未登入或目前不可用，本機單字和測驗紀錄仍保留在此瀏覽器。</p>}
+        {import.meta.env.DEV&&authDiagnostic&&<details className="notice" open><summary>開發診斷資訊</summary><p>Firebase Auth code: <code>{authDiagnostic.code}</code></p><p>{authDiagnostic.message}</p></details>}
       </section>
 
       <section className="card">
